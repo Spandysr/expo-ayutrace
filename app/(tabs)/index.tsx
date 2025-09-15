@@ -1,80 +1,173 @@
-import { Image } from "expo-image";
-import { Platform, StyleSheet } from "react-native";
+import React from "react";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  ScrollView,
+  Dimensions
+} from "react-native";
+import { useRouter } from "expo-router";
 
-import { HelloWave } from "@/components/HelloWave";
-import ParallaxScrollView from "@/components/ParallaxScrollView";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
+const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const router = useRouter();
+
+  const quickActions = [
+    { title: 'Scan Product', subtitle: 'Scan QR code to track', action: () => router.push('/(tabs)/scan') },
+    { title: 'New Batch', subtitle: 'Create product batch', action: () => router.push('/batch/new') },
+    { title: 'My Batches', subtitle: 'View your batches', action: () => router.push('/batch/list') },
+    { title: 'View History', subtitle: 'See scan history', action: () => router.push('/(tabs)/history') },
+  ];
+
+  const recentActivity = [
+    { id: 'AB12345', product: 'Ashwagandha Powder', status: 'Verified', date: '2024-01-15' },
+    { id: 'TU67890', product: 'Turmeric Root', status: 'Processing', date: '2024-01-12' },
+  ];
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
-      headerImage={
-        <Image
-          source={require("@/assets/images/partial-react-logo.png")}
-          style={styles.reactLogo}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Replit + Expo</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-          to see changes. Press{" "}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: "cmd + d",
-              android: "cmd + m",
-              web: "F12",
-            })}
-          </ThemedText>{" "}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">
-            npm run reset-project
-          </ThemedText>{" "}
-          to get a fresh <ThemedText type="defaultSemiBold">app</ThemedText>{" "}
-          directory. This will move the current{" "}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{" "}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.welcome}>Welcome back!</Text>
+        <Text style={styles.subtitle}>Track your Ayurvedic products</Text>
+      </View>
+      
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            {quickActions.map((action, index) => (
+              <TouchableOpacity key={index} style={styles.actionCard} onPress={action.action}>
+                <Text style={styles.actionTitle}>{action.title}</Text>
+                <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          {recentActivity.map((item) => (
+            <View key={item.id} style={styles.activityCard}>
+              <View style={styles.activityInfo}>
+                <Text style={styles.productName}>{item.product}</Text>
+                <Text style={styles.batchId}>Batch: {item.id}</Text>
+                <Text style={styles.activityDate}>{item.date}</Text>
+              </View>
+              <View style={[
+                styles.statusBadge,
+                { backgroundColor: item.status === 'Verified' ? '#E8F5E8' : '#FFF3E0' }
+              ]}>
+                <Text style={[
+                  styles.statusText,
+                  { color: item.status === 'Verified' ? '#4CAF50' : '#FF9800' }
+                ]}>
+                  {item.status}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  stepContainer: {
-    gap: 8,
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  welcome: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666666',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  section: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 16,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  actionCard: {
+    width: (width - 60) / 2,
+    backgroundColor: '#F8F8F8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginBottom: 4,
+  },
+  actionSubtitle: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  activityCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
+  activityInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  batchId: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 2,
+  },
+  activityDate: {
+    fontSize: 12,
+    color: '#999999',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
