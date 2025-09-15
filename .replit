@@ -9,10 +9,6 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 8081
-externalPort = 80
-
-[[ports]]
 localPort = 8082
 externalPort = 3000
 
@@ -72,13 +68,13 @@ args = "AyuTrack App"
 name = "AyuTrack App"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx expo start --port 5000 --dev-client"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx expo start --port 5000"
+waitForPort = 5000
 
 [agent]
 expertMode = true
