@@ -1,10 +1,59 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
+
+// Simple hashing utility
+const sha256 = async (input) => {
+  return await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    input
+  );
+};
+
+// Custom hook for blockchain functionality
+const useBlockchain = () => {
+  const [blockchain, setBlockchain] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const addBlock = async (data) => {
+    setLoading(true);
+    const previousHash = blockchain.length > 0 ? blockchain[blockchain.length - 1].hash : '0';
+    const timestamp = Date.now();
+    const blockData = JSON.stringify({ index: blockchain.length, timestamp, data, previousHash });
+    const hash = await sha256(blockData);
+
+    setBlockchain(prev => [...prev, { hash, data, timestamp, index: blockchain.length, previousHash }]);
+    setLoading(false);
+    return hash;
+  };
+
+  return { blockchain, addBlock, loading };
+};
+
 
 export default function NewBatchScreen() {
   const router = useRouter();
+  const { addBlock, loading, blockchain } = useBlockchain();
+  const [productType, setProductType] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [previousHash, setPreviousHash] = useState('');
+  const [currentHash, setCurrentHash] = useState('');
+
+  const handleCreateBatch = async () => {
+    if (!productType || !quantity || !batchNumber) {
+      alert('Please fill in all fields');
+      return;
+    }
+    const batchData = { productType, quantity, batchNumber, timestamp: Date.now() };
+    const hash = await addBlock(batchData);
+    setCurrentHash(hash);
+    setPreviousHash(blockchain.length > 0 ? blockchain[blockchain.length - 1].hash : '0');
+    // Optionally navigate or show success message
+    alert(`Batch created successfully! Hash: ${hash}`);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -15,19 +64,65 @@ export default function NewBatchScreen() {
         <Text style={styles.title}>New Batch</Text>
         <View style={{ width: 40 }} />
       </View>
-      
-      <ScrollView style={styles.content}>
+
+      <ScrollView style={styles.content} contentContainerStyle={styles.form}>
         <Text style={styles.description}>
-          New batch creation form will be implemented here.
-          This matches prototype screen 2 with product type dropdown, quantity, date, and geo-tagging.
+          Create a new batch for your product. The batch will be secured using blockchain technology.
         </Text>
-        
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>Product Type Dropdown</Text>
-          <Text style={styles.placeholderText}>Quantity Input</Text>
-          <Text style={styles.placeholderText}>Date Picker</Text>
-          <Text style={styles.placeholderText}>Batch Number</Text>
-          <Text style={styles.placeholderText}>Add Geo-tag Location</Text>
+
+        <View style={styles.form}>
+          <Text style={styles.label}>Product Type</Text>
+          <TextInput
+            style={styles.input}
+            value={productType}
+            onChangeText={setProductType}
+            placeholder="e.g., Organic Apples"
+          />
+
+          <Text style={styles.label}>Quantity</Text>
+          <TextInput
+            style={styles.input}
+            value={quantity}
+            onChangeText={setQuantity}
+            placeholder="e.g., 100 kg"
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.label}>Batch Number</Text>
+          <TextInput
+            style={styles.input}
+            value={batchNumber}
+            onChangeText={setBatchNumber}
+            placeholder="e.g., BATCH-12345"
+          />
+
+          {/* Blockchain Information Display */}
+          <View style={styles.blockchainInfo}>
+            <Text style={styles.blockchainTitle}>Blockchain Integration</Text>
+            <Text style={styles.blockchainDescription}>
+              Each batch is recorded on a distributed ledger, ensuring transparency and immutability.
+            </Text>
+            {blockchain.length > 0 && (
+              <View style={styles.previousHashContainer}>
+                <Text style={styles.previousHashLabel}>Previous Block Hash:</Text>
+                <Text style={styles.previousHash}>{blockchain[blockchain.length - 1].hash}</Text>
+              </View>
+            )}
+            {currentHash ? (
+              <View style={styles.hashContainer}>
+                <Text style={styles.hashLabel}>Current Block Hash:</Text>
+                <Text style={styles.hash}>{currentHash}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.createButton, loading && styles.disabledButton]}
+            onPress={handleCreateBatch}
+            disabled={loading}
+          >
+            <Text style={styles.createButtonText}>{loading ? 'Creating...' : 'Create Batch'}</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -62,23 +157,95 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 16,
   },
-  description: {
+  form: {
+    paddingVertical: 20,
+  },
+  label: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#FAFAFA',
+  },
+  blockchainInfo: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  blockchainTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 8,
+  },
+  blockchainDescription: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+  },
+  previousHashContainer: {
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: '#E8F5E8',
+    borderRadius: 4,
+  },
+  previousHashLabel: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  previousHash: {
+    fontSize: 12,
     color: '#666',
-    marginBottom: 24,
-    lineHeight: 24,
+    fontFamily: 'monospace',
   },
-  placeholder: {
-    padding: 20,
-    backgroundColor: '#F8F8F8',
-    borderRadius: 12,
+  hashContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  hashLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E65100',
+    marginBottom: 8,
+  },
+  hash: {
+    fontSize: 12,
+    color: '#333',
+    fontFamily: 'monospace',
+    lineHeight: 16,
+  },
+  createButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 16,
+    borderRadius: 8,
     alignItems: 'center',
+    marginTop: 32,
+    marginBottom: 20,
   },
-  placeholderText: {
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
+  },
+  createButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    color: '#999',
-    marginBottom: 12,
+    fontWeight: 'bold',
   },
 });
