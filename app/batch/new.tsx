@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Tex
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useBlockchain } from '../../hooks/useBlockchain';
+import BlockchainHashGenerator from '../../utils/blockchain';
 
 const PRODUCT_TYPES = [
   'Ashwagandha Powder',
@@ -57,6 +58,16 @@ export default function NewBatchScreen() {
     const day = String(now.getDate()).padStart(2, '0');
     const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     setBatchNumber(`AYU-${year}${month}${day}-${randomSuffix}`);
+
+    // Get initial location
+    const loadInitialLocation = async () => {
+      console.log('Loading initial location...');
+      const location = await BlockchainHashGenerator.getCurrentLocation();
+      setCurrentLocation(location);
+      console.log('Initial location loaded:', location);
+    };
+    
+    loadInitialLocation();
   }, [blockchain]);
 
   const handleCreateBatch = async () => {
@@ -244,10 +255,25 @@ export default function NewBatchScreen() {
             <Text style={styles.locationDescription}>
               Your current location will be automatically captured and added to the blockchain for this stage.
             </Text>
+            <TouchableOpacity 
+              style={styles.refreshLocationButton} 
+              onPress={async () => {
+                console.log('Refreshing location...');
+                const location = await BlockchainHashGenerator.getCurrentLocation();
+                setCurrentLocation(location);
+                console.log('Location refreshed:', location);
+              }}
+            >
+              <Ionicons name="refresh" size={16} color="#4CAF50" />
+              <Text style={styles.refreshLocationText}>Refresh Location</Text>
+            </TouchableOpacity>
             {currentLocation && (
               <View style={styles.locationInfo}>
                 <Text style={styles.locationText}>
-                  📍 {currentLocation.address || `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`}
+                  📍 {currentLocation.address || `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`}
+                </Text>
+                <Text style={styles.locationAccuracy}>
+                  Coordinates: {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
                 </Text>
               </View>
             )}
@@ -523,6 +549,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2E7D32',
     fontWeight: '500',
+  },
+  refreshLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  refreshLocationText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  locationAccuracy: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
   },
   blockchainInfo: {
     marginTop: 24,

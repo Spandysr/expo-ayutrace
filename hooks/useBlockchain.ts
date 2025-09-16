@@ -219,8 +219,10 @@ export const useBlockchain = () => {
         }
       }
 
-      // Get current location
+      // Get current location with better logging
+      console.log('Getting current location for batch creation...');
       const currentLocation = await BlockchainHashGenerator.getCurrentLocation();
+      console.log('Location result:', currentLocation);
       
       // Generate stage data based on the stage
       const currentStage = stage || (isFirstBlock ? 'FARMING' : 'PROCESSING');
@@ -409,12 +411,17 @@ export const useBlockchain = () => {
   }, [blockchain]);
 
   const getBatchByNumber = useCallback((batchNumber: string) => {
+    // Handle URL encoded parameters and decode
+    const decodedBatchNumber = decodeURIComponent(batchNumber);
+    console.log('Looking for batch:', decodedBatchNumber);
+    console.log('Available batches:', blockchain.map(b => b.data.batchNumber));
+    
     // First try exact match
-    let batch = blockchain.find(entry => entry.data.batchNumber === batchNumber);
+    let batch = blockchain.find(entry => entry.data.batchNumber === decodedBatchNumber);
     
     // If not found, try to find by base batch number (without stage suffix)
     if (!batch) {
-      const baseBatchNumber = batchNumber.split('-').slice(0, 3).join('-'); // e.g., TUR-2024-002
+      const baseBatchNumber = decodedBatchNumber.split('-').slice(0, 3).join('-'); // e.g., TUR-2024-002
       batch = blockchain.find(entry => {
         const entryBaseBatch = entry.data.batchNumber.split('-').slice(0, 3).join('-');
         return entryBaseBatch === baseBatchNumber;
@@ -424,11 +431,19 @@ export const useBlockchain = () => {
     // If still not found, try partial matching
     if (!batch) {
       batch = blockchain.find(entry => 
-        entry.data.batchNumber.includes(batchNumber) || 
-        batchNumber.includes(entry.data.batchNumber)
+        entry.data.batchNumber.toLowerCase().includes(decodedBatchNumber.toLowerCase()) || 
+        decodedBatchNumber.toLowerCase().includes(entry.data.batchNumber.toLowerCase())
       );
     }
     
+    // Try case-insensitive exact match
+    if (!batch) {
+      batch = blockchain.find(entry => 
+        entry.data.batchNumber.toLowerCase() === decodedBatchNumber.toLowerCase()
+      );
+    }
+    
+    console.log('Found batch:', batch ? batch.data.batchNumber : 'Not found');
     return batch;
   }, [blockchain]);
 

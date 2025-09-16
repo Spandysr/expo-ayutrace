@@ -27,17 +27,24 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      console.log('Looking for batch with ID:', id);
+      console.log('Product page - Looking for batch with ID:', id);
+      console.log('ID type:', typeof id, 'Value:', id);
+      
       const batch = getBatchByNumber(id as string);
-      const history = getFullBatchHistory(id as string);
+      console.log('Product page - Found batch:', batch);
       
-      console.log('Found batch:', batch);
-      console.log('Found history:', history);
-      
-      setBatchData(batch);
-      setBatchHistory(history);
+      if (batch) {
+        const history = getFullBatchHistory(batch.data.batchNumber);
+        console.log('Product page - Found history:', history);
+        setBatchData(batch);
+        setBatchHistory(history);
+      } else {
+        console.log('Product page - No batch found, setting null');
+        setBatchData(null);
+        setBatchHistory([]);
+      }
     }
-  }, [id]);
+  }, [id, getBatchByNumber, getFullBatchHistory]);
 
   if (isLoading) {
     return (
