@@ -224,7 +224,7 @@ export default function NewBatchScreen() {
                 style={styles.input}
                 value={privateKey}
                 onChangeText={setPrivateKey}
-                placeholder="Enter private key from previous block"
+                placeholder="Enter private key or encrypted key (ENC_...)"
                 secureTextEntry={true}
                 autoCapitalize="characters"
               />
@@ -240,35 +240,36 @@ export default function NewBatchScreen() {
               <TouchableOpacity 
                 style={styles.decryptKeyButton}
                 onPress={() => {
-                  Alert.prompt(
+                  Alert.alert(
                     'Decrypt Private Key',
-                    'Enter the encrypted private key you received:',
+                    'Please paste the encrypted private key in the private key field above, then tap this button again to decrypt it.',
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { 
-                        text: 'Decrypt', 
-                        onPress: async (encryptedKey) => {
-                          if (encryptedKey) {
+                        text: 'Decrypt Current Key', 
+                        onPress: async () => {
+                          if (privateKey && privateKey.startsWith('ENC_')) {
                             try {
                               const decryptedKey = await BlockchainHashGenerator.decryptPrivateKey(
-                                encryptedKey, 
+                                privateKey, 
                                 getLatestHash() || ''
                               );
                               setPrivateKey(decryptedKey);
                               Alert.alert('Success!', 'Private key decrypted and loaded');
                             } catch (error) {
-                              Alert.alert('Error', 'Failed to decrypt key. Please check the encrypted key and try again.');
+                              Alert.alert('Error', 'Failed to decrypt key. Please check the encrypted key format and try again.');
                             }
+                          } else {
+                            Alert.alert('Info', 'Please paste an encrypted private key (starting with ENC_) in the field above first.');
                           }
                         }
                       }
-                    ],
-                    'plain-text'
+                    ]
                   );
                 }}
               >
                 <Ionicons name="lock-open" size={16} color="#2196F3" />
-                <Text style={styles.decryptKeyText}>Decrypt Received Key</Text>
+                <Text style={styles.decryptKeyText}>Decrypt Key Above</Text>
               </TouchableOpacity>
               <Text style={styles.privateKeyNote}>
                 ⚠️ You need the private key from the previous block to create a new block
