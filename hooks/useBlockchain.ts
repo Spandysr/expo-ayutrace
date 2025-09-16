@@ -409,10 +409,27 @@ export const useBlockchain = () => {
   }, [blockchain]);
 
   const getBatchByNumber = useCallback((batchNumber: string) => {
-    return blockchain.find(entry => 
-      entry.data.batchNumber === batchNumber ||
-      entry.data.batchNumber.startsWith(batchNumber.split('-').slice(0, -1).join('-'))
-    );
+    // First try exact match
+    let batch = blockchain.find(entry => entry.data.batchNumber === batchNumber);
+    
+    // If not found, try to find by base batch number (without stage suffix)
+    if (!batch) {
+      const baseBatchNumber = batchNumber.split('-').slice(0, 3).join('-'); // e.g., TUR-2024-002
+      batch = blockchain.find(entry => {
+        const entryBaseBatch = entry.data.batchNumber.split('-').slice(0, 3).join('-');
+        return entryBaseBatch === baseBatchNumber;
+      });
+    }
+    
+    // If still not found, try partial matching
+    if (!batch) {
+      batch = blockchain.find(entry => 
+        entry.data.batchNumber.includes(batchNumber) || 
+        batchNumber.includes(entry.data.batchNumber)
+      );
+    }
+    
+    return batch;
   }, [blockchain]);
 
   const getBatchByHash = useCallback((hash: string) => {
@@ -420,10 +437,13 @@ export const useBlockchain = () => {
   }, [blockchain]);
 
   const getFullBatchHistory = useCallback((baseBatchNumber: string) => {
-    const baseNumber = baseBatchNumber.split('-').slice(0, -1).join('-') || baseBatchNumber;
-    return blockchain.filter(entry => 
-      entry.data.batchNumber.startsWith(baseNumber)
-    ).sort((a, b) => a.timestamp - b.timestamp);
+    // Extract base batch number (first 3 parts: TUR-2024-002)
+    const baseNumber = baseBatchNumber.split('-').slice(0, 3).join('-');
+    
+    return blockchain.filter(entry => {
+      const entryBaseNumber = entry.data.batchNumber.split('-').slice(0, 3).join('-');
+      return entryBaseNumber === baseNumber;
+    }).sort((a, b) => a.timestamp - b.timestamp);
   }, [blockchain]);
 
   const generateTransactionHash = useCallback(async (

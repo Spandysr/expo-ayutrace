@@ -27,8 +27,12 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     if (id) {
+      console.log('Looking for batch with ID:', id);
       const batch = getBatchByNumber(id as string);
       const history = getFullBatchHistory(id as string);
+      
+      console.log('Found batch:', batch);
+      console.log('Found history:', history);
       
       setBatchData(batch);
       setBatchHistory(history);
