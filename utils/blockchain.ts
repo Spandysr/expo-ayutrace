@@ -309,6 +309,106 @@ export class BlockchainHashGenerator {
   }
 
   /**
+   * Encrypts a private key using the current block hash as encryption key
+   */
+  static async encryptPrivateKey(privateKey: string, blockHash?: string): Promise<string> {
+    const encryptionKey = blockHash || Date.now().toString();
+    const combinedData = `${privateKey}-${encryptionKey}-${Date.now()}`;
+    
+    const encrypted = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      combinedData
+    );
+    
+    // Create a reversible encoding by combining parts of the key with the hash
+    const keyParts = privateKey.match(/.{1,8}/g) || [];
+    const hashParts = (blockHash || encrypted).match(/.{1,8}/g) || [];
+    
+    let encryptedKey = '';
+    for (let i = 0; i < Math.max(keyParts.length, hashParts.length); i++) {
+      if (keyParts[i]) encryptedKey += keyParts[i];
+      if (hashParts[i]) encryptedKey += hashParts[i].substring(0, 4);
+    }
+    
+    // Add a verification suffix
+    const verification = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      privateKey
+    );
+    
+    return `ENC_${encryptedKey}_${verification.substring(0, 8)}`;
+  }
+
+  /**
+   * Decrypts a private key using the previous block hash
+   */
+  static async decryptPrivateKey(encryptedKey: string, blockHash: string): Promise<string> {
+    try {
+      if (!encryptedKey.startsWith('ENC_') || !encryptedKey.includes('_')) {
+        throw new Error('Invalid encrypted key format');
+      }
+      
+      const parts = encryptedKey.split('_');
+      if (parts.length !== 3) {
+        throw new Error('Invalid encrypted key structure');
+      }
+      
+      const encryptedData = parts[1];
+      const verification = parts[2];
+      
+      // Extract the original private key by removing hash parts
+      const hashParts = blockHash.match(/.{1,8}/g) || [];
+      let decryptedKey = '';
+      let position = 0;
+      
+      for (let i = 0; i < hashParts.length && position < encryptedData.length; i++) {
+        // Take 8 characters for the key part
+        if (position + 8 <= encryptedData.length) {
+          decryptedKey += encryptedData.substring(position, position + 8);
+          position += 8;
+        }
+        // Skip 4 characters for the hash part
+        position += 4;
+      }
+      
+      // Add any remaining characters
+      while (position < encryptedData.length && decryptedKey.length < 64) {
+        const remaining = encryptedData.substring(position);
+        const nextKeyPart = remaining.match(/^.{1,8}/);
+        if (nextKeyPart) {
+          decryptedKey += nextKeyPart[0];
+          position += nextKeyPart[0].length + 4; // Skip next hash part
+        } else {
+          break;
+        }
+      }
+      
+      // Pad if necessary
+      while (decryptedKey.length < 64) {
+        decryptedKey += '0';
+      }
+      
+      // Trim to 64 characters
+      decryptedKey = decryptedKey.substring(0, 64).toUpperCase();
+      
+      // Verify the decrypted key
+      const keyVerification = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        decryptedKey
+      );
+      
+      if (keyVerification.substring(0, 8) !== verification) {
+        throw new Error('Key verification failed - incorrect decryption');
+      }
+      
+      return decryptedKey;
+    } catch (error) {
+      console.error('Decryption error:', error);
+      throw new Error('Failed to decrypt private key');
+    }
+  }
+
+  /**
    * Generate fake scenario data for different stages
    */
   static generateStageData(stage: string, location?: any): any {

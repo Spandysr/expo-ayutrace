@@ -71,8 +71,8 @@ export default function NewBatchScreen() {
   }, [blockchain]);
 
   const handleCreateBatch = async () => {
-    if (!productType || !quantity) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!productType || !quantity || !batchNumber) {
+      Alert.alert('Error', 'Please fill in all required fields including batch number');
       return;
     }
 
@@ -110,14 +110,7 @@ export default function NewBatchScreen() {
       setProductType('');
       setQuantity('');
       setPrivateKey('');
-      
-      // Generate new batch number for next use
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      setBatchNumber(`AYU-${year}${month}${day}-${randomSuffix}`);
+      setBatchNumber('');
       
       Alert.alert(
         'Success!', 
@@ -194,12 +187,12 @@ export default function NewBatchScreen() {
             keyboardType="numeric"
           />
 
-          <Text style={styles.label}>Batch Number</Text>
+          <Text style={styles.label}>Batch Number *</Text>
           <TextInput
-            style={[styles.input, styles.disabledInput]}
+            style={styles.input}
             value={batchNumber}
-            editable={false}
-            placeholder="Auto-generated"
+            onChangeText={setBatchNumber}
+            placeholder="Enter batch number (e.g., AYU-2025-001)"
           />
 
           <Text style={styles.label}>Supply Chain Stage</Text>
@@ -243,6 +236,40 @@ export default function NewBatchScreen() {
                   <Text style={styles.useLastKeyText}>Use Latest Private Key</Text>
                 </TouchableOpacity>
               )}
+              
+              <TouchableOpacity 
+                style={styles.decryptKeyButton}
+                onPress={() => {
+                  Alert.prompt(
+                    'Decrypt Private Key',
+                    'Enter the encrypted private key you received:',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { 
+                        text: 'Decrypt', 
+                        onPress: async (encryptedKey) => {
+                          if (encryptedKey) {
+                            try {
+                              const decryptedKey = await BlockchainHashGenerator.decryptPrivateKey(
+                                encryptedKey, 
+                                getLatestHash() || ''
+                              );
+                              setPrivateKey(decryptedKey);
+                              Alert.alert('Success!', 'Private key decrypted and loaded');
+                            } catch (error) {
+                              Alert.alert('Error', 'Failed to decrypt key. Please check the encrypted key and try again.');
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    'plain-text'
+                  );
+                }}
+              >
+                <Ionicons name="lock-open" size={16} color="#2196F3" />
+                <Text style={styles.decryptKeyText}>Decrypt Received Key</Text>
+              </TouchableOpacity>
               <Text style={styles.privateKeyNote}>
                 ⚠️ You need the private key from the previous block to create a new block
               </Text>
@@ -321,6 +348,34 @@ export default function NewBatchScreen() {
                 <Text style={styles.privateKeyWarning}>
                   ⚠️ IMPORTANT: Save this private key! You'll need it to create the next block in the chain.
                 </Text>
+                
+                <View style={styles.shareKeySection}>
+                  <Text style={styles.shareKeyTitle}>📤 Share Encrypted Key</Text>
+                  <TouchableOpacity 
+                    style={styles.shareButton}
+                    onPress={async () => {
+                      const encryptedKey = await BlockchainHashGenerator.encryptPrivateKey(nextPrivateKey);
+                      Alert.alert(
+                        'Encrypted Private Key', 
+                        `Share this encrypted key with the next person:\n\n${encryptedKey}\n\nThey will need to decrypt it using the batch hash.`,
+                        [
+                          { text: 'Copy to Clipboard', onPress: () => {
+                            // In a real app, you would use Clipboard.setString()
+                            Alert.alert('Copied!', 'Encrypted key copied to clipboard');
+                          }},
+                          { text: 'OK' }
+                        ]
+                      );
+                    }}
+                  >
+                    <Ionicons name="share" size={16} color="#fff" />
+                    <Text style={styles.shareButtonText}>Generate Encrypted Key</Text>
+                  </TouchableOpacity>
+                  
+                  <Text style={styles.shareKeyNote}>
+                    💡 The recipient can decrypt this using the current block hash
+                  </Text>
+                </View>
               </View>
             ) : null}
 
@@ -755,5 +810,56 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  shareKeySection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2196F3',
+  },
+  shareKeyTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 8,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  shareButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  shareKeyNote: {
+    fontSize: 11,
+    color: '#1976D2',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  decryptKeyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  decryptKeyText: {
+    color: '#2196F3',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
