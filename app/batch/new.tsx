@@ -11,12 +11,29 @@ export default function NewBatchScreen() {
   const [productType, setProductType] = useState('');
   const [quantity, setQuantity] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
   const [currentHash, setCurrentHash] = useState('');
   const [previousHash, setPreviousHash] = useState('');
+  const [nextPrivateKey, setNextPrivateKey] = useState('');
+  const [consumerQRData, setConsumerQRData] = useState<any>(null);
+  const [showPrivateKeyInput, setShowPrivateKeyInput] = useState(false);
+
+  React.useEffect(() => {
+    setShowPrivateKeyInput(blockchain.length > 0);
+    if (blockchain.length > 0) {
+      const lastBlock = blockchain[blockchain.length - 1];
+      setPreviousHash(lastBlock.hash);
+    }
+  }, [blockchain]);
 
   const handleCreateBatch = async () => {
     if (!productType || !quantity || !batchNumber) {
       alert('Please fill in all fields');
+      return;
+    }
+
+    if (blockchain.length > 0 && !privateKey) {
+      alert('Private key is required for subsequent blocks');
       return;
     }
 
@@ -31,17 +48,26 @@ export default function NewBatchScreen() {
       quantity: quantityNum, 
       batchNumber,
       location: {
-        latitude: 0, // You can add location services later
-        longitude: 0
+        latitude: 12.9716, // Example: Bangalore coordinates
+        longitude: 77.5946
       }
     };
 
-    const result = await addBatch(batchData);
+    const result = await addBatch(batchData, blockchain.length > 0 ? privateKey : undefined);
     
     if (result.success) {
       setCurrentHash(result.hash);
-      setPreviousHash(result.entry.previousHash || '0');
-      alert(`Batch created successfully!\nHash: ${result.hash.substring(0, 16)}...`);
+      setPreviousHash(result.entry?.previousHash || '0');
+      setNextPrivateKey(result.privateKey || '');
+      setConsumerQRData(result.consumerQRData);
+      
+      // Clear form
+      setProductType('');
+      setQuantity('');
+      setBatchNumber('');
+      setPrivateKey('');
+      
+      alert(`Batch created successfully!\nHash: ${result.hash.substring(0, 16)}...\nPrivate Key for next block: ${result.privateKey?.substring(0, 16)}...`);
     } else {
       alert(`Error creating batch: ${result.error}`);
     }
@@ -88,6 +114,22 @@ export default function NewBatchScreen() {
             placeholder="e.g., AYU-2024-001"
           />
 
+          {showPrivateKeyInput && (
+            <>
+              <Text style={styles.label}>Private Key (Required)</Text>
+              <TextInput
+                style={styles.input}
+                value={privateKey}
+                onChangeText={setPrivateKey}
+                placeholder="Enter private key from previous block"
+                secureTextEntry={true}
+              />
+              <Text style={styles.privateKeyNote}>
+                ⚠️ You need the private key from the previous block to create a new block
+              </Text>
+            </>
+          )}
+
           {/* Blockchain Information Display */}
           <View style={styles.blockchainInfo}>
             <Text style={styles.blockchainTitle}>🔗 Hyperledger Fabric Integration</Text>
@@ -116,6 +158,34 @@ export default function NewBatchScreen() {
                 <Text style={styles.hash}>{currentHash}</Text>
                 <Text style={styles.hashNote}>
                   This hash represents your batch on the blockchain. It's verified by multiple peers in the network.
+                </Text>
+              </View>
+            ) : null}
+
+            {nextPrivateKey ? (
+              <View style={styles.privateKeyContainer}>
+                <Text style={styles.privateKeyLabel}>🔐 Private Key for Next Block:</Text>
+                <Text style={styles.privateKeyValue}>{nextPrivateKey}</Text>
+                <Text style={styles.privateKeyWarning}>
+                  ⚠️ IMPORTANT: Save this private key! You'll need it to create the next block in the chain.
+                </Text>
+              </View>
+            ) : null}
+
+            {consumerQRData ? (
+              <View style={styles.consumerQRContainer}>
+                <Text style={styles.consumerQRLabel}>📱 Consumer QR Code Data:</Text>
+                <View style={styles.qrDataContainer}>
+                  <Text style={styles.qrDataItem}>Product: {consumerQRData.productName}</Text>
+                  <Text style={styles.qrDataItem}>Batch: {consumerQRData.batchNumber}</Text>
+                  <Text style={styles.qrDataItem}>Origin: {consumerQRData.origin}</Text>
+                  <Text style={styles.qrDataItem}>Grade: {consumerQRData.qualityGrade}</Text>
+                  <Text style={styles.qrDataItem}>Certifications: {consumerQRData.certifications.join(', ')}</Text>
+                  <Text style={styles.qrDataItem}>Expiry: {consumerQRData.expiryDate}</Text>
+                  <Text style={styles.qrDataItem}>Verification: {consumerQRData.verificationUrl}</Text>
+                </View>
+                <Text style={styles.consumerQRNote}>
+                  This QR code can be printed on product packaging for consumer verification
                 </Text>
               </View>
             ) : null}
@@ -301,6 +371,73 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#555',
     lineHeight: 16,
+  },
+  privateKeyNote: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  privateKeyContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFC107',
+  },
+  privateKeyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E65100',
+    marginBottom: 8,
+  },
+  privateKeyValue: {
+    fontSize: 12,
+    color: '#333',
+    fontFamily: 'monospace',
+    backgroundColor: '#FFFDE7',
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  privateKeyWarning: {
+    fontSize: 11,
+    color: '#D84315',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  consumerQRContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  consumerQRLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E7D32',
+    marginBottom: 8,
+  },
+  qrDataContainer: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  qrDataItem: {
+    fontSize: 12,
+    color: '#333',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  consumerQRNote: {
+    fontSize: 11,
+    color: '#2E7D32',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   createButton: {
     backgroundColor: '#4CAF50',

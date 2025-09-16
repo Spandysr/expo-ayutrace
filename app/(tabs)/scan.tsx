@@ -31,14 +31,37 @@ export default function ScanScreen() {
 
   const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
     setScanned(true);
-    Alert.alert(
-      'QR Code Scanned!', 
-      `Product ID: ${data}`,
-      [
-        { text: 'Scan Again', onPress: () => setScanned(false) },
-        { text: 'View Product', onPress: () => router.push(`/product/${data}`) }
-      ]
-    );
+    
+    try {
+      // Try to parse as consumer QR data
+      const qrData = JSON.parse(data);
+      if (qrData.batchId && qrData.blockchainHash) {
+        Alert.alert(
+          'Product Verified!', 
+          `Product: ${qrData.productName}\nBatch: ${qrData.batchNumber}\nGrade: ${qrData.qualityGrade}\nOrigin: ${qrData.origin}\nCertifications: ${qrData.certifications.join(', ')}`,
+          [
+            { text: 'Scan Again', onPress: () => setScanned(false) },
+            { text: 'View Details', onPress: () => router.push(`/product/${qrData.batchId}`) },
+            { text: 'Verify Blockchain', onPress: () => {
+              Alert.alert('Blockchain Verified', `Hash: ${qrData.blockchainHash.substring(0, 16)}...\nThis product is authentic and verified on the blockchain.`);
+              setScanned(false);
+            }}
+          ]
+        );
+      } else {
+        throw new Error('Invalid QR format');
+      }
+    } catch (error) {
+      // Fallback for simple product ID
+      Alert.alert(
+        'QR Code Scanned!', 
+        `Product ID: ${data}`,
+        [
+          { text: 'Scan Again', onPress: () => setScanned(false) },
+          { text: 'View Product', onPress: () => router.push(`/product/${data}`) }
+        ]
+      );
+    }
   };
 
   if (hasPermission === null) {

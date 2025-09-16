@@ -7,6 +7,8 @@ export interface BlockchainEntry {
   data: BatchData;
   timestamp: number;
   previousHash?: string;
+  privateKey?: string;
+  consumerQRData?: any;
   endorsements?: Array<{
     peerId: string;
     signature: string;
@@ -18,12 +20,20 @@ export const useBlockchain = () => {
   const [blockchain, setBlockchain] = useState<BlockchainEntry[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const addBatch = useCallback(async (batchData: Omit<BatchData, 'timestamp' | 'previousHash'>) => {
+  const addBatch = useCallback(async (batchData: Omit<BatchData, 'timestamp' | 'previousHash' | 'privateKey'>, requiresPrivateKey?: string) => {
     setIsGenerating(true);
     
     try {
       const timestamp = Date.now();
       const previousHash = blockchain.length > 0 ? blockchain[blockchain.length - 1].hash : undefined;
+      
+      // Validate private key if this is not the first block
+      if (blockchain.length > 0 && requiresPrivateKey) {
+        const isValidKey = await BlockchainHashGenerator.validatePrivateKey(requiresPrivateKey, previousHash!);
+        if (!isValidKey) {
+          throw new Error('Invalid private key for block creation');
+        }
+      }
       
       const fullBatchData: BatchData = {
         ...batchData,
@@ -33,6 +43,12 @@ export const useBlockchain = () => {
 
       // Generate hash using expo-crypto
       const hash = await BlockchainHashGenerator.generateBatchHash(fullBatchData);
+      
+      // Generate private key for next block
+      const nextPrivateKey = await BlockchainHashGenerator.generatePrivateKey(hash, timestamp);
+      
+      // Generate consumer QR data
+      const consumerQRData = await BlockchainHashGenerator.generateConsumerQRData(fullBatchData, hash);
       
       // Simulate Hyperledger Fabric peer endorsement
       const endorsementResult = await BlockchainHashGenerator.simulatePeerEndorsement(hash);
@@ -46,6 +62,8 @@ export const useBlockchain = () => {
         data: fullBatchData,
         timestamp,
         previousHash,
+        privateKey: nextPrivateKey,
+        consumerQRData,
         endorsements: endorsementResult.endorsements
       };
 
@@ -54,6 +72,8 @@ export const useBlockchain = () => {
       return {
         success: true,
         hash,
+        privateKey: nextPrivateKey,
+        consumerQRData,
         entry: newEntry
       };
     } catch (error) {
