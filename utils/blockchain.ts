@@ -1,5 +1,6 @@
 
 import * as Crypto from 'expo-crypto';
+import * as Location from 'expo-location';
 
 export interface BatchData {
   productType: string;
@@ -8,10 +9,14 @@ export interface BatchData {
   location?: {
     latitude: number;
     longitude: number;
+    address?: string;
+    stage?: string;
   };
   batchNumber: string;
   previousHash?: string;
   privateKey?: string;
+  stage?: 'FARMING' | 'HARVESTING' | 'PROCESSING' | 'QUALITY_TESTING' | 'PACKAGING' | 'DISTRIBUTION' | 'RETAIL';
+  stageData?: any;
 }
 
 export interface ConsumerQRData {
@@ -30,9 +35,62 @@ export interface ConsumerQRData {
     licenseNumber: string;
     processedDate: string;
   };
+  locationHistory?: Array<{
+    stage: string;
+    location: {
+      latitude: number;
+      longitude: number;
+      address?: string;
+    };
+    timestamp: number;
+  }>;
 }
 
 export class BlockchainHashGenerator {
+  /**
+   * Gets current location for geo-tagging
+   */
+  static async getCurrentLocation(): Promise<{
+    latitude: number;
+    longitude: number;
+    address?: string;
+  } | null> {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+        return null;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      
+      // Get reverse geocoding for address
+      let address = '';
+      try {
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        
+        if (reverseGeocode.length > 0) {
+          const place = reverseGeocode[0];
+          address = `${place.city || ''}, ${place.region || ''}, ${place.country || ''}`.replace(/^,\s*|,\s*$/g, '');
+        }
+      } catch (error) {
+        console.log('Could not get address:', error);
+      }
+
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        address: address || undefined
+      };
+    } catch (error) {
+      console.log('Error getting location:', error);
+      return null;
+    }
+  }
+
   /**
    * Generates a SHA-256 hash for a batch entry using expo-crypto
    */
@@ -43,7 +101,9 @@ export class BlockchainHashGenerator {
       timestamp: batchData.timestamp,
       location: batchData.location,
       batchNumber: batchData.batchNumber,
-      previousHash: batchData.previousHash || '0'
+      previousHash: batchData.previousHash || '0',
+      stage: batchData.stage,
+      stageData: batchData.stageData
     });
 
     return await Crypto.digestStringAsync(
@@ -106,36 +166,46 @@ export class BlockchainHashGenerator {
   }
 
   /**
-   * Generates a private key for the next block creation
+   * Generates a secure private key with numbers and alphabets
    */
   static async generatePrivateKey(batchHash: string, timestamp: number): Promise<string> {
     const keyData = {
       batchHash,
       timestamp,
       nonce: Math.random().toString(36).substring(2, 15),
-      entropy: Date.now().toString()
+      entropy: Date.now().toString(),
+      random: Math.random() * 1000000
     };
 
-    return await Crypto.digestStringAsync(
+    const rawKey = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       JSON.stringify(keyData)
     );
+
+    // Convert to alphanumeric format (numbers and uppercase letters only)
+    return rawKey.toUpperCase().replace(/[^A-F0-9]/g, '');
   }
 
   /**
    * Validates private key for next block creation
    */
   static async validatePrivateKey(privateKey: string, previousHash: string): Promise<boolean> {
+    // Enhanced validation - check format and length
+    if (!privateKey || privateKey.length !== 64) return false;
+    if (!/^[A-F0-9]+$/.test(privateKey)) return false;
+    if (!previousHash || previousHash.length !== 64) return false;
+    
     // In a real implementation, this would verify the private key against the blockchain
-    return privateKey.length === 64 && previousHash.length === 64;
+    return true;
   }
 
   /**
-   * Creates consumer QR data with complete product information
+   * Creates consumer QR data with complete product information including location history
    */
   static async generateConsumerQRData(
     batchData: BatchData,
     blockchainHash: string,
+    locationHistory?: Array<any>,
     additionalDetails?: Partial<ConsumerQRData>
   ): Promise<ConsumerQRData> {
     const baseUrl = 'https://ayutrack-verify.replit.app/product/';
@@ -144,18 +214,19 @@ export class BlockchainHashGenerator {
       batchId: batchData.batchNumber,
       productName: batchData.productType,
       batchNumber: batchData.batchNumber,
-      harvestDate: new Date(batchData.timestamp - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0], // 30 days before processing
-      origin: batchData.location ? `${batchData.location.latitude.toFixed(4)}, ${batchData.location.longitude.toFixed(4)}` : 'Kerala, India',
+      harvestDate: new Date(batchData.timestamp - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+      origin: batchData.location?.address || `${batchData.location?.latitude.toFixed(4)}, ${batchData.location?.longitude.toFixed(4)}` || 'Kerala, India',
       qualityGrade: 'Grade A',
       certifications: ['Organic', 'Ayush Certified', 'ISO 22000'],
       blockchainHash,
       verificationUrl: `${baseUrl}${batchData.batchNumber}`,
-      expiryDate: new Date(batchData.timestamp + (365 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0], // 1 year from processing
+      expiryDate: new Date(batchData.timestamp + (365 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
       manufacturingDetails: {
         facilityName: 'AyurVedic Processing Unit',
         licenseNumber: 'AYUSH-2024-001',
         processedDate: new Date(batchData.timestamp).toISOString().split('T')[0]
       },
+      locationHistory: locationHistory || [],
       ...additionalDetails
     };
 
@@ -203,8 +274,83 @@ export class BlockchainHashGenerator {
 
     return {
       endorsements,
-      consensusReached: endorsements.length >= 3 // Require majority consensus
+      consensusReached: endorsements.length >= 3
     };
+  }
+
+  /**
+   * Generate fake scenario data for different stages
+   */
+  static generateStageData(stage: string, location?: any): any {
+    const stageTemplates = {
+      FARMING: {
+        farmerName: "Ravi Kumar",
+        farmSize: "5 acres",
+        soilType: "Red laterite",
+        irrigationType: "Drip irrigation",
+        fertilizers: ["Organic compost", "Vermicompost"],
+        seedVariety: "Local indigenous",
+        plantingDate: new Date(Date.now() - (120 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        expectedHarvest: new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
+      },
+      HARVESTING: {
+        harvestDate: new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        harvestMethod: "Hand-picked",
+        moistureContent: "12%",
+        qualityGrade: "Premium",
+        harvestedBy: "Kumar Harvest Team",
+        weatherConditions: "Sunny, 28°C",
+        yieldPerAcre: "2.5 tonnes"
+      },
+      PROCESSING: {
+        processingDate: new Date(Date.now() - (15 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        processingMethod: "Traditional sun drying",
+        temperature: "45°C",
+        duration: "72 hours",
+        operator: "Ayur Processing Unit",
+        batchSize: "500 kg",
+        finalMoisture: "8%"
+      },
+      QUALITY_TESTING: {
+        testDate: new Date(Date.now() - (10 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        labName: "Ayush Certified Lab",
+        testResults: {
+          purity: "99.5%",
+          heavyMetals: "Within limits",
+          microbial: "Satisfactory",
+          pesticides: "Not detected",
+          activeCompounds: "Within range"
+        },
+        certificateNumber: "AC-2024-" + Math.floor(Math.random() * 10000),
+        validUntil: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
+      },
+      PACKAGING: {
+        packagingDate: new Date(Date.now() - (5 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        packagingType: "Food-grade aluminum pouch",
+        batchSize: "250g pouches",
+        packagingFacility: "AyurPack Industries",
+        expiryDate: new Date(Date.now() + (730 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        labelingCompliance: "FSSAI, Ayush Ministry"
+      },
+      DISTRIBUTION: {
+        distributionDate: new Date(Date.now() - (2 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+        distributorName: "AyurDistribute Pvt Ltd",
+        vehicleNumber: "KA-01-" + Math.floor(Math.random() * 10000),
+        driverName: "Suresh Patel",
+        transportConditions: "Ambient temperature, dry",
+        destinationRegion: location?.address || "Southern India"
+      },
+      RETAIL: {
+        receivedDate: new Date().toISOString().split('T')[0],
+        retailerName: "Organic Health Store",
+        storageConditions: "Cool, dry place",
+        shelfLocation: "Ayurvedic Section",
+        pricePerUnit: "₹299",
+        availableStock: Math.floor(Math.random() * 100) + 20
+      }
+    };
+
+    return stageTemplates[stage] || {};
   }
 }
 
