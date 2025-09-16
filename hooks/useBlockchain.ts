@@ -7,6 +7,11 @@ export interface BlockchainEntry {
   data: BatchData;
   timestamp: number;
   previousHash?: string;
+  endorsements?: Array<{
+    peerId: string;
+    signature: string;
+    timestamp: number;
+  }>;
 }
 
 export const useBlockchain = () => {
@@ -26,13 +31,22 @@ export const useBlockchain = () => {
         previousHash
       };
 
-      const hash = BlockchainHashGenerator.generateBatchHash(fullBatchData);
+      // Generate hash using expo-crypto
+      const hash = await BlockchainHashGenerator.generateBatchHash(fullBatchData);
       
+      // Simulate Hyperledger Fabric peer endorsement
+      const endorsementResult = await BlockchainHashGenerator.simulatePeerEndorsement(hash);
+      
+      if (!endorsementResult.consensusReached) {
+        throw new Error('Failed to reach consensus among peers');
+      }
+
       const newEntry: BlockchainEntry = {
         hash,
         data: fullBatchData,
         timestamp,
-        previousHash
+        previousHash,
+        endorsements: endorsementResult.endorsements
       };
 
       setBlockchain(prev => [...prev, newEntry]);
@@ -53,13 +67,13 @@ export const useBlockchain = () => {
     }
   }, [blockchain]);
 
-  const generateTransactionHash = useCallback((
+  const generateTransactionHash = useCallback(async (
     fromAddress: string,
     toAddress: string,
     batchId: string,
     eventType: 'CREATE' | 'TRANSFER' | 'VERIFY'
   ) => {
-    return BlockchainHashGenerator.generateTransactionHash(
+    return await BlockchainHashGenerator.generateTransactionHash(
       fromAddress,
       toAddress,
       batchId,
@@ -68,15 +82,15 @@ export const useBlockchain = () => {
     );
   }, []);
 
-  const generateQRHash = useCallback((batchHash: string, productId: string) => {
-    return BlockchainHashGenerator.generateQRHash(batchHash, productId);
+  const generateQRHash = useCallback(async (batchHash: string, productId: string) => {
+    return await BlockchainHashGenerator.generateQRHash(batchHash, productId);
   }, []);
 
   const getLatestHash = useCallback(() => {
     return blockchain.length > 0 ? blockchain[blockchain.length - 1].hash : null;
   }, [blockchain]);
 
-  const validateChain = useCallback(() => {
+  const validateChain = useCallback(async () => {
     for (let i = 1; i < blockchain.length; i++) {
       const currentBlock = blockchain[i];
       const previousBlock = blockchain[i - 1];
@@ -85,7 +99,7 @@ export const useBlockchain = () => {
         return false;
       }
       
-      const isValid = BlockchainHashGenerator.validateHash(
+      const isValid = await BlockchainHashGenerator.validateHash(
         currentBlock.data,
         currentBlock.hash
       );
@@ -97,6 +111,15 @@ export const useBlockchain = () => {
     return true;
   }, [blockchain]);
 
+  const getNetworkStatus = useCallback(() => {
+    return {
+      connected: true,
+      peerCount: 4,
+      lastBlockTime: blockchain.length > 0 ? blockchain[blockchain.length - 1].timestamp : null,
+      chainValid: blockchain.length === 0 ? true : null // Will be calculated when needed
+    };
+  }, [blockchain]);
+
   return {
     blockchain,
     addBatch,
@@ -104,6 +127,7 @@ export const useBlockchain = () => {
     generateQRHash,
     getLatestHash,
     validateChain,
+    getNetworkStatus,
     isGenerating,
     chainLength: blockchain.length
   };

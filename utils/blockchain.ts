@@ -1,5 +1,5 @@
 
-import { createHash } from 'crypto';
+import * as Crypto from 'expo-crypto';
 
 export interface BatchData {
   productType: string;
@@ -15,9 +15,9 @@ export interface BatchData {
 
 export class BlockchainHashGenerator {
   /**
-   * Generates a SHA-256 hash for a batch entry
+   * Generates a SHA-256 hash for a batch entry using expo-crypto
    */
-  static generateBatchHash(batchData: BatchData): string {
+  static async generateBatchHash(batchData: BatchData): Promise<string> {
     const dataString = JSON.stringify({
       productType: batchData.productType,
       quantity: batchData.quantity,
@@ -27,19 +27,22 @@ export class BlockchainHashGenerator {
       previousHash: batchData.previousHash || '0'
     });
 
-    return createHash('sha256').update(dataString).digest('hex');
+    return await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      dataString
+    );
   }
 
   /**
    * Generates a transaction hash for supply chain events
    */
-  static generateTransactionHash(
+  static async generateTransactionHash(
     fromAddress: string,
     toAddress: string,
     batchId: string,
     timestamp: number,
     eventType: 'CREATE' | 'TRANSFER' | 'VERIFY'
-  ): string {
+  ): Promise<string> {
     const transactionData = {
       from: fromAddress,
       to: toAddress,
@@ -49,13 +52,16 @@ export class BlockchainHashGenerator {
       nonce: Math.random().toString(36).substring(2, 15)
     };
 
-    return createHash('sha256').update(JSON.stringify(transactionData)).digest('hex');
+    return await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      JSON.stringify(transactionData)
+    );
   }
 
   /**
    * Generates a QR code compatible hash for product verification
    */
-  static generateQRHash(batchHash: string, productId: string): string {
+  static async generateQRHash(batchHash: string, productId: string): Promise<string> {
     const qrData = {
       batchHash,
       productId,
@@ -63,15 +69,56 @@ export class BlockchainHashGenerator {
       version: '1.0'
     };
 
-    return createHash('sha256').update(JSON.stringify(qrData)).digest('hex');
+    return await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      JSON.stringify(qrData)
+    );
   }
 
   /**
    * Validates hash integrity
    */
-  static validateHash(data: any, expectedHash: string): boolean {
-    const computedHash = createHash('sha256').update(JSON.stringify(data)).digest('hex');
+  static async validateHash(data: any, expectedHash: string): Promise<boolean> {
+    const computedHash = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      JSON.stringify(data)
+    );
     return computedHash === expectedHash;
+  }
+
+  /**
+   * Simulates Hyperledger Fabric peer endorsement
+   */
+  static async simulatePeerEndorsement(transactionHash: string): Promise<{
+    endorsements: Array<{
+      peerId: string;
+      signature: string;
+      timestamp: number;
+    }>;
+    consensusReached: boolean;
+  }> {
+    // Simulate multiple peer endorsements
+    const peers = ['farmer-peer', 'lab-peer', 'processor-peer', 'regulator-peer'];
+    const endorsements = [];
+
+    for (const peerId of peers) {
+      const endorsementData = `${transactionHash}-${peerId}-${Date.now()}`;
+      const signature = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        endorsementData
+      );
+      
+      endorsements.push({
+        peerId,
+        signature,
+        timestamp: Date.now()
+      });
+    }
+
+    return {
+      endorsements,
+      consensusReached: endorsements.length >= 3 // Require majority consensus
+    };
   }
 }
 
